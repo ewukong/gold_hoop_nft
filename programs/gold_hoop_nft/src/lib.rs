@@ -1,5 +1,3 @@
-pub mod merkle_tree;
-
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -14,8 +12,6 @@ use mpl_token_metadata::{
     types::DataV2,
 };
 
-use crate::merkle_tree::*;
-
 pub const ANCHOR_DISCRIMINATOR: usize = 8;
 
 declare_id!("5FYgyRz5zunLbZ4BwHR7ALzjjtRbPqr2Xe5qvDXDq4x");
@@ -23,7 +19,6 @@ declare_id!("5FYgyRz5zunLbZ4BwHR7ALzjjtRbPqr2Xe5qvDXDq4x");
 #[program]
 pub mod test_nft {
 
-    use anchor_lang::solana_program::keccak;
     use mpl_token_metadata::types::Collection;
 
     use super::*;
@@ -31,23 +26,6 @@ pub mod test_nft {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         ctx.accounts.nft_data.volume = 0;
         ctx.accounts.nft_data.total_supply = 20;
-
-        Ok(())
-    }
-
-    pub fn verify(ctx: Context<Verify>, proof: Vec<[u8; 32]>) -> Result<()> {
-        //init ctx variables
-        let payer = &ctx.accounts.payer;
-        let token_distributor = &mut ctx.accounts.merkle_data_account;
-        //check that the owner is a Signer
-        require!(ctx.accounts.payer.is_signer, MerkleError::Unauthorized);
-
-        let leaf = keccak::hashv(&[&payer.key().to_bytes()]);
-
-        require!(
-            merkle_tree::verify(proof, token_distributor.root, leaf.0),
-            MerkleError::InvalidProof
-        );
 
         Ok(())
     }
@@ -181,32 +159,10 @@ pub struct InitNFT<'info> {
         bump,
     )]
     pub nft_data: Account<'info, NFTData>,
-
-    #[account(
-        mut,
-        seeds = [
-            b"MerkleTokenDistributor".as_ref(),
-            signer.key().to_bytes().as_ref()
-        ],
-        bump,
-    )]
-    pub merkle_data_account: Account<'info, MerkleData>,
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(
-        init,
-        seeds = [
-            b"MerkleTokenDistributor".as_ref(),
-            signer.key().to_bytes().as_ref()
-        ],
-        bump,
-        space = ANCHOR_DISCRIMINATOR + MerkleData::INIT_SPACE,
-        payer = signer,
-    )]
-    pub merkle_data_account: Account<'info, MerkleData>,
-
     #[account(
         init,
         seeds = [
@@ -228,16 +184,4 @@ pub struct Initialize<'info> {
 pub struct NFTData {
     volume: u16,
     total_supply: u16,
-}
-
-#[error_code]
-pub enum MerkleError {
-    #[msg("Invalid Merkle Proof")]
-    InvalidProof,
-    #[msg("Account is not authorized to execute this instruction")]
-    Unauthorized,
-    #[msg("Token account owner did not match intended owner")]
-    OwnerMismatch,
-    #[msg("Exceeded maximum mint amount.")]
-    ExceededMaxMint,
 }
